@@ -67,9 +67,7 @@ impl Repository {
             AuthenticationAdapter::new(pool.clone()),
         )));
 
-        let search_service = Arc::new(Mutex::new(SearchService::new(SearchAdapter::new(
-            pool.clone(),
-        ))));
+        let search_service = Arc::new(SearchService::new(SearchAdapter::new(pool)));
 
         (
             Self {

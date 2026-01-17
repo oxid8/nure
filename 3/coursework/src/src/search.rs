@@ -1,7 +1,6 @@
 use crate::input::Input;
 use crate::widget::{scroll, tip, url};
 
-use iced::Length::Shrink;
 use service::search::Data;
 use service::{
     SearchContract,
@@ -9,7 +8,7 @@ use service::{
 };
 
 use iced::widget::{Column, button, checkbox, column, container, lazy, pick_list, row, text};
-use iced::{Element, Length::Fill, Task, futures::lock::Mutex};
+use iced::{Element, Length::Fill, Task};
 use std::sync::Arc;
 use strum::{Display, VariantArray};
 
@@ -22,7 +21,7 @@ pub struct Search<S> {
     limit: u8,
 
     state: State,
-    service: Arc<Mutex<S>>,
+    service: Arc<S>,
 }
 
 #[derive(Default)]
@@ -154,20 +153,13 @@ impl Table {
             table[0].push(url(&entry.name, Message::PackagePressed(entry.id)));
             table[1].push(text(entry.version.to_string()).into());
             table[2].push(url(&entry.base_name, Message::BasePressed(entry.base_id)));
-            table[3].push(
-                entry
-                    .url
-                    .as_ref()
-                    .map_or("-".into(), |s| 
-
-                    tip(
-                        url(&"link", Message::URLPressed(s.clone())),
-                        s.clone(),
-                        tip::Position::Bottom,
-                    ),
-
-                    ),
-            );
+            table[3].push(entry.url.as_ref().map_or("-".into(), |s| {
+                tip(
+                    url(&"link", Message::URLPressed(s.clone())),
+                    s.clone(),
+                    tip::Position::Bottom,
+                )
+            }));
             table[4].push(text(entry.description.to_string()).into());
             table[5].push(text(entry.updated_at.to_string()).into());
             table[6].push(text(entry.created_at.to_string()).into());
@@ -184,8 +176,8 @@ impl Table {
     }
 }
 
-impl<S: SearchContract + 'static> Search<S> {
-    pub fn new(service: Arc<Mutex<S>>) -> Self {
+impl<S: SearchContract + Sync + 'static> Search<S> {
+    pub fn new(service: Arc<S>) -> Self {
         Self {
             input: Input::new("search_input"),
             mode: Mode::NameAndDescription,
@@ -305,15 +297,9 @@ impl<S: SearchContract + 'static> Search<S> {
                 let arc = self.service.clone();
 
                 return Some(
-                    Task::perform(
-                        async move {
-                            let Some(service) = arc.try_lock() else {
-                                return Err("other search request is being performed".into());
-                            };
-                            service.search(search_data).await
-                        },
-                        |r| Message::RequestResult(Arc::new(r)),
-                    )
+                    Task::perform(async move { arc.search(search_data).await }, |r| {
+                        Message::RequestResult(Arc::new(r))
+                    })
                     .into(),
                 );
             }
